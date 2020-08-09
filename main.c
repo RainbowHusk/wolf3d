@@ -10,6 +10,8 @@ int init(t_sdl *sdl)
 	sdl->rend = SDL_CreateRenderer(sdl->win, -1, SDL_RENDERER_ACCELERATED);
 	if (sdl->rend == NULL)
 		return 1;
+	sdl->textures = SDL_ConvertSurfaceFormat(SDL_LoadBMP("123.bmp"), SDL_PIXELFORMAT_ABGR8888, 0);
+	sdl->bytes_texture = (unsigned char*) sdl->textures->pixels;
 	sdl->win_texture = SDL_CreateTexture(sdl->rend, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, W_W, W_H);
 	sdl->scrs = SDL_GetWindowSurface(sdl->win);
 	SDL_SetRelativeMouseMode(SDL_TRUE);
@@ -36,7 +38,7 @@ void input_pixel(t_sdl *sdl, int x, int y, int color)
 	sdl->bytes[x * 4 + 3 + y * sdl->pitch] = 0;
 }
 
-void draw_rect(t_sdl *sdl, int x, int y, int w, int h, int color)
+void draw_rect(t_sdl *sdl, int x, int y, int h, int color)
 {
 	int i;
 	int j;
@@ -45,7 +47,7 @@ void draw_rect(t_sdl *sdl, int x, int y, int w, int h, int color)
 	while (++i < y + h)
 	{
 		j = x - 1;
-		while (++j < x + w)
+		while (++j < x + h)
 		{
 			if (j >= W_W || i >= W_H || j < 0 || i < 0)
 				continue;
@@ -79,35 +81,18 @@ void draw_fov(t_sdl *sdl, t_player *player)
 	}
 }
 
-void draw_texture(t_sdl *sdl, int x, int y, int h, int numb)
+void draw_texture(t_sdl *sdl, int x, int y, int xt, int yt)
 {
-	int i;
-	int xt;
-	int yt;
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
-
-	xt = 64 * numb + x % 64;
-	i = y - 1;
-	yt = 0;
-	while (++i < y + h)
-	{
-		r = sdl->bytes_texture[xt * 4 + 0 + (yt / (h / 64)) * sdl->textures->pitch];
-		g = sdl->bytes_texture[xt * 4 + 1 + (yt / (h / 64)) * sdl->textures->pitch];
-		b = sdl->bytes_texture[xt * 4 + 2 + (yt / (h / 64)) * sdl->textures->pitch];
-		yt++;
-		if (x >= W_W || i >= W_H || x < 0 || i < 0)
-			continue;
-		input_pixel(sdl, x, i, RGB(r, g, b));
-	}
+	sdl->bytes[x * 4 + 0 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 0 + yt * sdl->textures->pitch];
+	sdl->bytes[x * 4 + 1 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 1 + yt * sdl->textures->pitch];
+	sdl->bytes[x * 4 + 2 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 2 + yt * sdl->textures->pitch];
 }
 
 void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
 {
 	int i;
+	int j;
 	float t;
-	int color;
 
 	i = -1;
 	while (++i < W_W)
@@ -121,17 +106,23 @@ void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
 			if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] != 0 )
 			{
 				int column_height = W_H / (t * cos(angle - player->angle)) * map->rect_w;
-				color = column_height / 2;
-				if (color > 220)
-					color = 220;
-				else if (color < 0)
-					color = 0;
-				if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 1)
-					draw_rect(sdl, i, W_H / 2 - column_height / 2, 1, column_height, RGB(color, color, 0));
-					//draw_texture(sdl, i, W_H / 2 - column_height / 2, column_height, 0);
-				else if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 2)
-					draw_rect(sdl, i, W_H / 2 - column_height / 2, 1, column_height, RGB(0, color, color));
-					//draw_texture(sdl, i, W_H / 2 - column_height / 2, column_height, 1);
+				float hitx = cx / map->rect_w - floor((cx / map->rect_w)+.5);
+				float hity = cy / map->rect_w - floor((cy / map->rect_w)+.5);
+				int x_texcoord = hitx * 64;
+				if (fabs(hity) > fabs(hitx))
+					x_texcoord = hity * 64;
+				if (x_texcoord < 0)
+					x_texcoord += 64;
+				j = -1;
+                while (++j < column_height)
+				{
+					int pix = j + W_H / 2 - column_height / 2;
+                    if (pix < 0 || pix >= W_H) continue;
+					if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 1)
+						draw_texture(sdl, i, pix, x_texcoord, (j * 64) / column_height);
+					else if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 2 )
+						draw_texture(sdl, i, pix, 64 + x_texcoord, (j * 64) / column_height);
+                }
                 break;
 			}
 			t += .05;
@@ -164,11 +155,11 @@ void draw_map(t_map *map, t_sdl *sdl)
 		while (++x < map->w)
 		{
 			if (map->map[y * map->w + x] == 0)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, map->rect_w, RGB(20, 20, 20));
+				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(20, 20, 20));
 			else if (map->map[y * map->w + x] == 1)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[1], sdl->bytes_texture[2]));
+				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[1], sdl->bytes_texture[2]));
 			else if (map->map[y * map->w + x] == 2)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, map->rect_w, RGB(sdl->bytes_texture[64*0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
+				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[64*0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
 		}
 		x = -1;
 	}
@@ -181,8 +172,6 @@ int main(int arg, char **argv)
 	t_map map;
 	int x = -1, y = -1, spd = 3;
 
-	sdl.textures = SDL_ConvertSurfaceFormat(SDL_LoadBMP("123.bmp"), SDL_PIXELFORMAT_ABGR8888, 0);
-	sdl.bytes_texture = (unsigned char*) sdl.textures->pixels;
 	map.w = 8;
 	map.h = 8;
 	map.s = map.w * map.h;
@@ -250,12 +239,12 @@ int main(int arg, char **argv)
 			}
 		}
 		SDL_LockTexture(sdl.win_texture, NULL, &sdl.bytes, &sdl.pitch);
-		draw_rect(&sdl, 0, 0, W_W, W_H, RGB(0, 0, 0));
+		draw_rect(&sdl, 0, 0, W_W, RGB(0, 0, 0));
 		map_rect_w(&map);
 		draw_walls(&map, &sdl, &p);
 		draw_map(&map, &sdl);
 		draw_fov(&sdl, &p);
-		draw_rect(&sdl, p.x - 3, p.y - 3, 6, 6, RGB(255, 255, 255));
+		draw_rect(&sdl, p.x - 3, p.y - 3, 6, RGB(255, 255, 255));
 		SDL_UnlockTexture(sdl.win_texture);
 		SDL_RenderCopy(sdl.rend, sdl.win_texture, NULL, NULL);
 		SDL_RenderPresent(sdl.rend);
