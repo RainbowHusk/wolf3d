@@ -86,6 +86,7 @@ void draw_texture(t_sdl *sdl, int x, int y, int xt, int yt)
 	sdl->bytes[x * 4 + 0 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 0 + yt * sdl->textures->pitch];
 	sdl->bytes[x * 4 + 1 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 1 + yt * sdl->textures->pitch];
 	sdl->bytes[x * 4 + 2 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 2 + yt * sdl->textures->pitch];
+	// *(int *)(sdl->bytes + x * 4 + y * sdl->pitch) = *(int *)(sdl->bytes_texture + xt * 4 + 0 + yt * sdl->textures->pitch);
 }
 
 void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
@@ -159,7 +160,7 @@ void draw_map(t_map *map, t_sdl *sdl)
 			else if (map->map[y * map->w + x] == 1)
 				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[1], sdl->bytes_texture[2]));
 			else if (map->map[y * map->w + x] == 2)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[64*0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
+				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
 		}
 		x = -1;
 	}
@@ -216,25 +217,47 @@ int main(int arg, char **argv)
 			{
 				if (sdl.e.key.keysym.sym == SDLK_ESCAPE)
 					sdl.run = false;
+				float tmpx = cos(p.angle) * spd;
+				float tmpy = sin(p.angle) * spd;
 				if (sdl.e.key.keysym.sym == SDLK_UP || sdl.e.key.keysym.sym == SDLK_w)
 				{
-					p.x += cos(p.angle) * spd;
-					p.y += sin(p.angle) * spd;
+					if ((map.map[
+							((int)(p.x + tmpx)/map.rect_w) + (int)(p.y + tmpy)/map.rect_w * map.w
+								]) == 0)
+					{
+						p.x += tmpx;
+						p.y += tmpy;
+					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_DOWN || sdl.e.key.keysym.sym == SDLK_s)
 				{
-					p.x -= cos(p.angle) * spd;
-					p.y -= sin(p.angle) * spd;
+					if ((map.map[
+							((int)(p.x - tmpx)/map.rect_w) + (int)(p.y - tmpy)/map.rect_w * map.w
+								]) == 0)
+					{
+						p.x -= tmpx;
+						p.y -= tmpy;
+					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_RIGHT || sdl.e.key.keysym.sym == SDLK_d)
 				{
-					p.x -= sin(p.angle) * spd;
-					p.y += cos(p.angle) * spd;
+					if ((map.map[
+							((int)(p.x - tmpy)/map.rect_w) + (int)(p.y + tmpx)/map.rect_w * map.w
+								]) == 0)
+					{
+						p.x -= tmpy;
+						p.y += tmpx;
+					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_LEFT || sdl.e.key.keysym.sym == SDLK_a)
 				{
-					p.x += sin(p.angle) * spd;
-					p.y -= cos(p.angle) * spd;
+					if ((map.map[
+							((int)(p.x + tmpy)/map.rect_w) + (int)(p.y - tmpx)/map.rect_w * map.w
+								]) == 0)
+					{
+						p.x += tmpy;
+						p.y -= tmpx;
+					}
 				}
 			}
 		}
