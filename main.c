@@ -102,29 +102,41 @@ void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
 		t = 0;
 		while (t < W_W)
 		{
-        	float cx = player->x + t * cos(angle);
-        	float cy = player->y + t * sin(angle);
-			if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] != 0 )
+        	float cx = (player->x + t * cos(angle)) / map->rect_w;
+        	float cy = (player->y + t * sin(angle)) / map->rect_w;
+			if (map->map[(int)cx + (int)cy * map->w] != 0 )
 			{
 				int column_height = W_H / (t * cos(angle - player->angle)) * map->rect_w;
-				float hitx = cx / map->rect_w - floor((cx / map->rect_w)+.5);
-				float hity = cy / map->rect_w - floor((cy / map->rect_w)+.5);
+				float hitx = cx  - floorf(cx + .5);
+				float hity = cy  - floorf(cy + .5);
 				int x_texcoord = hitx * 64;
 				if (fabs(hity) > fabs(hitx))
 					x_texcoord = hity * 64;
 				if (x_texcoord < 0)
 					x_texcoord += 64;
 				j = -1;
+				int pix;
                 while (++j < column_height)
 				{
-					int pix = j + W_H / 2 - column_height / 2;
+					pix = j + W_H / 2 - column_height / 2;
                     if (pix < 0 || pix >= W_H) continue;
-					if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 1)
+					if (map->map[(int)cx + (int)cy * map->w] == 1)
 						draw_texture(sdl, i, pix, x_texcoord, (j * 64) / column_height);
-					else if (map->map[(int)cx / map->rect_w + (int)cy / map->rect_w * map->w] == 2 )
+					else if (map->map[(int)cx + (int)cy * map->w] == 2 )
 						draw_texture(sdl, i, pix, 64 + x_texcoord, (j * 64) / column_height);
                 }
-                break;
+				float column_angle = atan((double) ( i - (W_H / 2) ) / W_H);
+				float rayangle = player->angle + column_angle;
+				for (int j = pix; j < W_H; ++j)
+				{
+					float distance = ((float) W_H / 2 / (j - W_H / 2) ) * 64 * cos(column_angle);
+					int x = (int)(-distance * cos(rayangle));
+					int y = (int)(distance * sin(rayangle));
+					x += player->x;
+					y += player->y;
+					draw_texture(sdl, i, j, x&63, y&63);
+				}
+				break;
 			}
 			t += .05;
 		}
@@ -169,14 +181,16 @@ void draw_map(t_map *map, t_sdl *sdl)
 int main(int arg, char **argv)
 {
 	t_sdl sdl;
-	t_player p;
+	t_player player;
 	t_map map;
+
 	int x = -1, y = -1, spd = 3;
 
 	map.w = 8;
 	map.h = 8;
 	map.s = map.w * map.h;
 	map.map = (int *)malloc(sizeof(int) * map.s);
+
 	while (++y < map.h)
 	{
 		while (++x < map.w)
@@ -190,9 +204,9 @@ int main(int arg, char **argv)
 	map.map[2 * map.w + 3] = 2;
 	map.map[5 * map.w + 5] = 2;
 	x = 0;
-	p.x = 50;
-	p.y = 50;
-	p.angle = 4.72;
+	player.x = 100;
+	player.y = 100;
+	player.angle = 4.72;
 	if (init(&sdl))
 		return 1;
 	while (sdl.run)
@@ -204,59 +218,59 @@ int main(int arg, char **argv)
 			if (sdl.e.type == SDL_MOUSEMOTION)
 			{
 				if (sdl.e.motion.x - x > 0 || sdl.e.motion.x == W_W - 1)
-					p.angle += 0.01;
+					player.angle += 0.01;
 				else
-					p.angle -= 0.01;
-				if (p.angle > PI * 2)
-					p.angle -= PI * 2;
-				else if (p.angle < 0)
-					p.angle += PI * 2;
+					player.angle -= 0.01;
+				if (player.angle > PI * 2)
+					player.angle -= PI * 2;
+				else if (player.angle < 0)
+					player.angle += PI * 2;
 				x = sdl.e.motion.x;
 			}
 			if (sdl.e.type == SDL_KEYDOWN)
 			{
 				if (sdl.e.key.keysym.sym == SDLK_ESCAPE)
 					sdl.run = false;
-				float tmpx = cos(p.angle) * spd;
-				float tmpy = sin(p.angle) * spd;
+				float tmpx = cos(player.angle) * spd;
+				float tmpy = sin(player.angle) * spd;
 				if (sdl.e.key.keysym.sym == SDLK_UP || sdl.e.key.keysym.sym == SDLK_w)
 				{
 					if ((map.map[
-							((int)(p.x + tmpx)/map.rect_w) + (int)(p.y + tmpy)/map.rect_w * map.w
+							((int)(player.x + tmpx)/map.rect_w) + (int)(player.y + tmpy)/map.rect_w * map.w
 								]) == 0)
 					{
-						p.x += tmpx;
-						p.y += tmpy;
+						player.x += tmpx;
+						player.y += tmpy;
 					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_DOWN || sdl.e.key.keysym.sym == SDLK_s)
 				{
 					if ((map.map[
-							((int)(p.x - tmpx)/map.rect_w) + (int)(p.y - tmpy)/map.rect_w * map.w
+							((int)(player.x - tmpx)/map.rect_w) + (int)(player.y - tmpy)/map.rect_w * map.w
 								]) == 0)
 					{
-						p.x -= tmpx;
-						p.y -= tmpy;
+						player.x -= tmpx;
+						player.y -= tmpy;
 					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_RIGHT || sdl.e.key.keysym.sym == SDLK_d)
 				{
 					if ((map.map[
-							((int)(p.x - tmpy)/map.rect_w) + (int)(p.y + tmpx)/map.rect_w * map.w
+							((int)(player.x - tmpy)/map.rect_w) + (int)(player.y + tmpx)/map.rect_w * map.w
 								]) == 0)
 					{
-						p.x -= tmpy;
-						p.y += tmpx;
+						player.x -= tmpy;
+						player.y += tmpx;
 					}
 				}
 				if (sdl.e.key.keysym.sym == SDLK_LEFT || sdl.e.key.keysym.sym == SDLK_a)
 				{
 					if ((map.map[
-							((int)(p.x + tmpy)/map.rect_w) + (int)(p.y - tmpx)/map.rect_w * map.w
+							((int)(player.x + tmpy)/map.rect_w) + (int)(player.y - tmpx)/map.rect_w * map.w
 								]) == 0)
 					{
-						p.x += tmpy;
-						p.y -= tmpx;
+						player.x += tmpy;
+						player.y -= tmpx;
 					}
 				}
 			}
@@ -264,10 +278,10 @@ int main(int arg, char **argv)
 		SDL_LockTexture(sdl.win_texture, NULL, &sdl.bytes, &sdl.pitch);
 		draw_rect(&sdl, 0, 0, W_W, RGB(0, 0, 0));
 		map_rect_w(&map);
-		draw_walls(&map, &sdl, &p);
+		draw_walls(&map, &sdl, &player);
 		draw_map(&map, &sdl);
-		draw_fov(&sdl, &p);
-		draw_rect(&sdl, p.x - 3, p.y - 3, 6, RGB(255, 255, 255));
+		draw_fov(&sdl, &player);
+		draw_rect(&sdl, player.x - 3, player.y - 3, 6, RGB(255, 255, 255));
 		SDL_UnlockTexture(sdl.win_texture);
 		SDL_RenderCopy(sdl.rend, sdl.win_texture, NULL, NULL);
 		SDL_RenderPresent(sdl.rend);
