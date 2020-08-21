@@ -281,7 +281,6 @@ int main(int arg, char **argv)
 			}
 		}
 		SDL_LockTexture(sdl.win_texture, NULL, &sdl.bytes, &sdl.pitch);
-		draw_rect(&sdl, 0, 0, W_W, RGB(0, 0, 0));
 		map_rect_w(&map);
 		draw_skybox(&sdl, &player);
 		draw_walls(&map, &sdl, &player);
