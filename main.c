@@ -1,25 +1,18 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   main.c                                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: ahusk <marvin@42.fr>                       +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2020/08/22 00:19:54 by ahusk             #+#    #+#             */
+/*   Updated: 2020/08/22 00:19:56 by ahusk            ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "wolf3d.h"
 
-int init(t_sdl *sdl)
-{
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
-		return 1;
-	sdl->win = SDL_CreateWindow("Wolf3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W_W, W_H, SDL_WINDOW_SHOWN);
-	if (sdl->win == NULL)
-		return 1;
-	sdl->rend = SDL_CreateRenderer(sdl->win, -1, SDL_RENDERER_ACCELERATED);
-	if (sdl->rend == NULL)
-		return 1;
-	sdl->textures = SDL_ConvertSurfaceFormat(SDL_LoadBMP("123.bmp"), SDL_PIXELFORMAT_ABGR8888, 0);
-	sdl->bytes_texture = (unsigned char*) sdl->textures->pixels;
-	sdl->win_texture = SDL_CreateTexture(sdl->rend, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, W_W, W_H);
-	sdl->scrs = SDL_GetWindowSurface(sdl->win);
-	SDL_SetRelativeMouseMode(SDL_TRUE);
-	sdl->run = true;
-	return 0;
-}
-
-void quit(t_sdl *sdl)
+void	quit(t_sdl *sdl)
 {
 	SDL_DestroyRenderer(sdl->rend);
 	sdl->rend = NULL;
@@ -30,267 +23,93 @@ void quit(t_sdl *sdl)
 	SDL_Quit();
 }
 
-void input_pixel(t_sdl *sdl, int x, int y, int color)
+void	hooks(t_sdl *sdl, t_map *map, t_player *player)
 {
-	sdl->bytes[x * 4 + 0 + y * sdl->pitch] = (color & 0xFF);
-	sdl->bytes[x * 4 + 1 + y * sdl->pitch] = (color & 0xFF00) >> 8;
-	sdl->bytes[x * 4 + 2 + y * sdl->pitch] = (color & 0xFF0000) >> 16;
-	sdl->bytes[x * 4 + 3 + y * sdl->pitch] = 0;
-}
+	float		tmp_x;
+	float		tmp_y;
 
-void draw_rect(t_sdl *sdl, int x, int y, int h, int color)
-{
-	int i;
-	int j;
-
-	i = y - 1;
-	while (++i < y + h)
+	while (SDL_PollEvent(&sdl->e) != 0)
 	{
-		j = x - 1;
-		while (++j < x + h)
+		if (sdl->e.type == SDL_QUIT)
+			sdl->run = false;
+		if (sdl->e.type == SDL_MOUSEMOTION)
 		{
-			if (j >= W_W || i >= W_H || j < 0 || i < 0)
-				continue;
-			input_pixel(sdl, j, i, color);
-		}
-	}
-}
-
-void draw_fov(t_sdl *sdl, t_player *player)
-{
-    float angle1;
-	float angle2;
-	float t;
-
-	t = 0;
-	angle2 = player->angle - FOV / 2 + FOV;
-	angle1 = player->angle - FOV / 2;
-	while (t < 20)
-	{
-        float cx1 = player->x + t * cos(angle1);
-        float cy1 = player->y + t * sin(angle1);
-		float cx2 = player->x + t * cos(angle2);
-        float cy2 = player->y + t * sin(angle2);
-		if (cx1 >= W_W || cy1 >= W_H || cx1 < 0 || cy1 < 0)
-			break;
-		if (cx2 >= W_W || cy2 >= W_H || cx2 < 0 || cy2 < 0)
-			break;
-		input_pixel(sdl, cx1, cy1, RGB(128, 128, 128));
-		input_pixel(sdl, cx2, cy2, RGB(128, 128, 128));
-		t += .05;
-	}
-}
-
-void draw_texture(t_sdl *sdl, int x, int y, int xt, int yt)
-{
-	sdl->bytes[x * 4 + 0 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 0 + yt * sdl->textures->pitch];
-	sdl->bytes[x * 4 + 1 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 1 + yt * sdl->textures->pitch];
-	sdl->bytes[x * 4 + 2 + y * sdl->pitch] = sdl->bytes_texture[xt * 4 + 2 + yt * sdl->textures->pitch];
-	// *(int *)(sdl->bytes + x * 4 + y * sdl->pitch) = *(int *)(sdl->bytes_texture + xt * 4 + 0 + yt * sdl->textures->pitch);
-}
-
-void draw_skybox(t_sdl *sdl, t_player *player)
-{
-	int i;
-	int j;
-	int h;
-	int a;
-
-	a = 64 / PI;
-	h = 2 * W_H / 3;
-	i = -1;
-	while (++i < W_W)
-	{
-		j = -1;
-		while (++j < h)
-			draw_texture(sdl, i, j, 128 + (int)(i + (player->angle * a)) / (W_W / 64) % 64, (j * 64) / h);
-	}
-}
-
-void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
-{
-	int i;
-	int j;
-	float t;
-
-	i = -1;
-	while (++i < W_W)
-	{
-        float angle = player->angle - FOV / 2 + FOV * i / W_W;
-		t = 0;
-		while (t < W_W)
-		{
-        	float cx = (player->x + t * cos(angle)) / map->rect_w;
-        	float cy = (player->y + t * sin(angle)) / map->rect_w;
-			if (map->map[(int)cx + (int)cy * map->w] != 0 )
-			{
-				int column_height = W_H / (t * cos(angle - player->angle)) * map->rect_w;
-				float hitx = cx  - floorf(cx + .5);
-				float hity = cy  - floorf(cy + .5);
-				int x_texcoord = hitx * 64;
-				if (fabs(hity) > fabs(hitx))
-					x_texcoord = hity * 64;
-				if (x_texcoord < 0)
-					x_texcoord += 64;
-				int pix;
-				j = -1;
-                while (++j < column_height)
-				{
-					pix = j + W_H / 2 - column_height / 2;
-                    if (pix < 0 || pix >= W_H) continue;
-					if (map->map[(int)cx + (int)cy * map->w] == 1)
-						draw_texture(sdl, i, pix, x_texcoord, (j * 64) / column_height);
-					else if (map->map[(int)cx + (int)cy * map->w] >= 2 )
-						draw_texture(sdl, i, pix, 64 + x_texcoord, (j * 64) / column_height);
-                }
-				for (int j = pix; j < W_H; ++j)
-					input_pixel(sdl, i, j, RGB(113, 113, 113));
-				break;
-			}
-			t += .05;
-		}
-	}
-}
-
-void map_rect_w(t_map *map)
-{
-	int rect_w;
-    int rect_h;
-
-	rect_w = W_W / map->w / 3;
-	rect_h = W_H / map->h / 3;
-	if (rect_h < rect_w)
-		map->rect_w = rect_h;
-	else
-		map->rect_w = rect_w;
-}
-
-void draw_map(t_map *map, t_sdl *sdl)
-{
-	int y;
-	int x;
-
-	y = -1;
-	x = -1;
-	while (++y < map->h)
-	{
-		while (++x < map->w)
-		{
-			if (map->map[y * map->w + x] == 0)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(20, 20, 20));
-			else if (map->map[y * map->w + x] == 1)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[1], sdl->bytes_texture[2]));
-			else if (map->map[y * map->w + x] >= 2)
-				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
-		}
-		x = -1;
-	}
-}
-
-int main(int arg, char **argv)
-{
-	t_sdl sdl;
-	t_player player;
-	t_map map;
-
-	int x = -1, y = -1, spd = 3;
-
-	map.w = 8;
-	map.h = 8;
-	map.s = map.w * map.h;
-	map.map = (int *)malloc(sizeof(int) * map.s);
-
-	while (++y < map.h)
-	{
-		while (++x < map.w)
-			if (x == 0 || y == 0 || x == map.w - 1 || y == map.h - 1)
-				map.map[y * map.w + x] = 1;
+			if (sdl->e.motion.x - player->mouse_x > 0 || sdl->e.motion.x == W_W - 1)
+				player->angle += 0.05;
 			else
-				map.map[y * map.w + x] = 0;
-		x = -1;
-	}
-	map.map[1 * map.w + 3] = 5;
-	map.map[2 * map.w + 3] = 2;
-	map.map[5 * map.w + 5] = 2;
-	x = 0;
-	player.x = 100;
-	player.y = 100;
-	player.angle = 2121;
-	if (init(&sdl))
-		return 1;
-	while (sdl.run)
-	{
-		while (SDL_PollEvent(&sdl.e) != 0)
+				player->angle -= 0.05;
+			player->mouse_x = sdl->e.motion.x;
+		}
+		if (sdl->e.type == SDL_KEYDOWN)
 		{
-			if (sdl.e.type == SDL_QUIT)
-				sdl.run = false;
-			if (sdl.e.type == SDL_MOUSEMOTION)
+			if (sdl->e.key.keysym.sym == SDLK_ESCAPE)
+				sdl->run = false;
+			tmp_x = cos(player->angle) * player->speed;
+			tmp_y = sin(player->angle) * player->speed;
+			if (sdl->e.key.keysym.sym == SDLK_UP || sdl->e.key.keysym.sym == SDLK_w)
 			{
-				if (sdl.e.motion.x - x > 0 || sdl.e.motion.x == W_W - 1)
-					player.angle += 0.01;
-				else
-					player.angle -= 0.01;
-				x = sdl.e.motion.x;
+				if ((map->map[
+						((int)(player->x + tmp_x) / map->rect_w) + (int)(player->y + tmp_y) / map->rect_w * map->w
+							]) == 0)
+				{
+					player->x += tmp_x;
+					player->y += tmp_y;
+				}
 			}
-			if (sdl.e.type == SDL_KEYDOWN)
+			if (sdl->e.key.keysym.sym == SDLK_DOWN || sdl->e.key.keysym.sym == SDLK_s)
 			{
-				if (sdl.e.key.keysym.sym == SDLK_ESCAPE)
-					sdl.run = false;
-				float tmpx = cos(player.angle) * spd;
-				float tmpy = sin(player.angle) * spd;
-				if (sdl.e.key.keysym.sym == SDLK_UP || sdl.e.key.keysym.sym == SDLK_w)
+				if ((map->map[
+						((int)(player->x - tmp_x) / map->rect_w) + (int)(player->y - tmp_y) / map->rect_w * map->w
+							]) == 0)
 				{
-					if ((map.map[
-							((int)(player.x + tmpx)/map.rect_w) + (int)(player.y + tmpy)/map.rect_w * map.w
-								]) == 0)
-					{
-						player.x += tmpx;
-						player.y += tmpy;
-					}
+					player->x -= tmp_x;
+					player->y -= tmp_y;
 				}
-				if (sdl.e.key.keysym.sym == SDLK_DOWN || sdl.e.key.keysym.sym == SDLK_s)
+			}
+			if (sdl->e.key.keysym.sym == SDLK_RIGHT || sdl->e.key.keysym.sym == SDLK_d)
+			{
+				if ((map->map[
+						((int)(player->x - tmp_y) / map->rect_w) + (int)(player->y + tmp_x) / map->rect_w * map->w
+							]) == 0)
 				{
-					if ((map.map[
-							((int)(player.x - tmpx)/map.rect_w) + (int)(player.y - tmpy)/map.rect_w * map.w
-								]) == 0)
-					{
-						player.x -= tmpx;
-						player.y -= tmpy;
-					}
+					player->x -= tmp_y;
+					player->y += tmp_x;
 				}
-				if (sdl.e.key.keysym.sym == SDLK_RIGHT || sdl.e.key.keysym.sym == SDLK_d)
+			}
+			if (sdl->e.key.keysym.sym == SDLK_LEFT || sdl->e.key.keysym.sym == SDLK_a)
+			{
+				if ((map->map[
+						((int)(player->x + tmp_y) / map->rect_w) + (int)(player->y - tmp_x) / map->rect_w * map->w
+							]) == 0)
 				{
-					if ((map.map[
-							((int)(player.x - tmpy)/map.rect_w) + (int)(player.y + tmpx)/map.rect_w * map.w
-								]) == 0)
-					{
-						player.x -= tmpy;
-						player.y += tmpx;
-					}
-				}
-				if (sdl.e.key.keysym.sym == SDLK_LEFT || sdl.e.key.keysym.sym == SDLK_a)
-				{
-					if ((map.map[
-							((int)(player.x + tmpy)/map.rect_w) + (int)(player.y - tmpx)/map.rect_w * map.w
-								]) == 0)
-					{
-						player.x += tmpy;
-						player.y -= tmpx;
-					}
+					player->x += tmp_y;
+					player->y -= tmp_x;
 				}
 			}
 		}
-		SDL_LockTexture(sdl.win_texture, NULL, &sdl.bytes, &sdl.pitch);
-		map_rect_w(&map);
-		draw_skybox(&sdl, &player);
-		draw_walls(&map, &sdl, &player);
-		draw_map(&map, &sdl);
-		draw_fov(&sdl, &player);
-		draw_rect(&sdl, player.x - 3, player.y - 3, 6, RGB(255, 255, 255));
-		SDL_UnlockTexture(sdl.win_texture);
-		SDL_RenderCopy(sdl.rend, sdl.win_texture, NULL, NULL);
-		SDL_RenderPresent(sdl.rend);
 	}
-	quit(&sdl);
-	return 0;
+}
+
+int		main(int arg, char **argv)
+{
+	t_main main;
+
+	init(&main);
+	while (main.sdl.run)
+	{
+		hooks(&main.sdl, &main.map, &main.player);
+		SDL_LockTexture(main.sdl.win_texture, NULL, &main.sdl.bytes, &main.sdl.pitch);
+		draw_skybox(&main.sdl, &main.player);
+		draw_walls(&main, &main, &main.raycast, &main.map);
+		draw_map(&main.map, &main.sdl);
+		draw_fov(&main.sdl, &main.player);
+		main.player.rect.x = main.player.x - 3;
+		main.player.rect.y = main.player.y - 3;
+		draw_rect(&main.sdl, &main.player.rect);
+		SDL_UnlockTexture(main.sdl.win_texture);
+		SDL_RenderCopy(main.sdl.rend, main.sdl.win_texture, NULL, NULL);
+		SDL_RenderPresent(main.sdl.rend);
+	}
+	quit(&main.sdl);
+	return (0);
 }
