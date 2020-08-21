@@ -89,6 +89,24 @@ void draw_texture(t_sdl *sdl, int x, int y, int xt, int yt)
 	// *(int *)(sdl->bytes + x * 4 + y * sdl->pitch) = *(int *)(sdl->bytes_texture + xt * 4 + 0 + yt * sdl->textures->pitch);
 }
 
+void draw_skybox(t_sdl *sdl, t_player *player)
+{
+	int i;
+	int j;
+	int h;
+	int a;
+
+	a = 64 / PI;
+	h = 2 * W_H / 3;
+	i = -1;
+	while (++i < W_W)
+	{
+		j = -1;
+		while (++j < h)
+			draw_texture(sdl, i, j, 128 + (int)(i + (player->angle * a)) / (W_W / 64) % 64, (j * 64) / h);
+	}
+}
+
 void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
 {
 	int i;
@@ -114,28 +132,19 @@ void draw_walls(t_map *map, t_sdl *sdl, t_player *player)
 					x_texcoord = hity * 64;
 				if (x_texcoord < 0)
 					x_texcoord += 64;
-				j = -1;
 				int pix;
+				j = -1;
                 while (++j < column_height)
 				{
 					pix = j + W_H / 2 - column_height / 2;
                     if (pix < 0 || pix >= W_H) continue;
 					if (map->map[(int)cx + (int)cy * map->w] == 1)
 						draw_texture(sdl, i, pix, x_texcoord, (j * 64) / column_height);
-					else if (map->map[(int)cx + (int)cy * map->w] == 2 )
+					else if (map->map[(int)cx + (int)cy * map->w] >= 2 )
 						draw_texture(sdl, i, pix, 64 + x_texcoord, (j * 64) / column_height);
                 }
-				float column_angle = atan((double) ( i - (W_H / 2) ) / W_H);
-				float rayangle = player->angle + column_angle;
 				for (int j = pix; j < W_H; ++j)
-				{
-					float distance = ((float) W_H / 2 / (j - W_H / 2) ) * 64 * cos(column_angle);
-					int x = (int)(-distance * cos(rayangle));
-					int y = (int)(distance * sin(rayangle));
-					x += player->x;
-					y += player->y;
-					draw_texture(sdl, i, j, x&63, y&63);
-				}
+					input_pixel(sdl, i, j, RGB(113, 113, 113));
 				break;
 			}
 			t += .05;
@@ -171,7 +180,7 @@ void draw_map(t_map *map, t_sdl *sdl)
 				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(20, 20, 20));
 			else if (map->map[y * map->w + x] == 1)
 				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[1], sdl->bytes_texture[2]));
-			else if (map->map[y * map->w + x] == 2)
+			else if (map->map[y * map->w + x] >= 2)
 				draw_rect(sdl, x * map->rect_w, y * map->rect_w, map->rect_w, RGB(sdl->bytes_texture[0], sdl->bytes_texture[64*1], sdl->bytes_texture[64*2]));
 		}
 		x = -1;
@@ -200,13 +209,13 @@ int main(int arg, char **argv)
 				map.map[y * map.w + x] = 0;
 		x = -1;
 	}
-	map.map[1 * map.w + 3] = 1;
+	map.map[1 * map.w + 3] = 5;
 	map.map[2 * map.w + 3] = 2;
 	map.map[5 * map.w + 5] = 2;
 	x = 0;
 	player.x = 100;
 	player.y = 100;
-	player.angle = 4.72;
+	player.angle = 2121;
 	if (init(&sdl))
 		return 1;
 	while (sdl.run)
@@ -221,10 +230,6 @@ int main(int arg, char **argv)
 					player.angle += 0.01;
 				else
 					player.angle -= 0.01;
-				if (player.angle > PI * 2)
-					player.angle -= PI * 2;
-				else if (player.angle < 0)
-					player.angle += PI * 2;
 				x = sdl.e.motion.x;
 			}
 			if (sdl.e.type == SDL_KEYDOWN)
@@ -278,6 +283,7 @@ int main(int arg, char **argv)
 		SDL_LockTexture(sdl.win_texture, NULL, &sdl.bytes, &sdl.pitch);
 		draw_rect(&sdl, 0, 0, W_W, RGB(0, 0, 0));
 		map_rect_w(&map);
+		draw_skybox(&sdl, &player);
 		draw_walls(&map, &sdl, &player);
 		draw_map(&map, &sdl);
 		draw_fov(&sdl, &player);
